@@ -1,38 +1,400 @@
 package av.is.aegis;
 
+import avis.juikit.Juikit;
+import com.google.common.util.concurrent.AtomicDouble;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.MouseWheelEvent;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.text.DecimalFormat;
-import java.util.Arrays;
-import java.util.Random;
+import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.logging.Logger;
 
-public class Network {
+public class Network implements NetworkForm, Serializable {
 
     private static final Random NEURON_CHOOSER = new Random();
 
-    private static final Logger LOGGER = Logger.getLogger("AEGIS-VIII");
+    private static final Logger LOGGER = Logger.getLogger("AEGIS-VIII-NETWORK");
 
-    private static final int INPUT_NEURON_MAX_SYNAPSES = 20;
-    private static final int INTER_NEURON_MAX_SYNAPSES = 100;
+    private static final int VIS_INDENT = 10;
+    private static final int VIS_SQUARE_WIDTH = 10;
+    private static final int VIS_SQUARE_WIDTH_HALF = VIS_SQUARE_WIDTH / 2;
+    private static final int VIS_SQUARE_HEIGHT = 10;
+    private static final int VIS_SQUARE_HEIGHT_HALF = VIS_SQUARE_HEIGHT / 2;
+    private static final int VIS_SQUARE_BETWEEN_DISTANCE = 4;
+
+    private static final int INPUT_NEURON_MAX_SYNAPSES = 10;
+    private static final int INTER_NEURON_MAX_SYNAPSES = 20;
     private static final int THREAD_POOL_SIZE = 50;
     private static final int TICK_DIVISION = 5;
 
     private final Neuron[] neurons;
     private final Neuron[] inputNeurons;
+    private final Neuron[] outputNeurons;
     private final int size;
     private final ThreadPoolExecutor threadPoolExecutor;
 
     private Neuron[] markedNeurons;
 
-    public Network(int inputs, int neurons) {
+    private boolean visualization = false;
+    private List<Neuron.Coordinate> neuronCoordinates = new CopyOnWriteArrayList<>();
+    private Map<Neuron, AtomicDouble> outputValues = new ConcurrentHashMap<>();
+
+    private Configuration configuration;
+
+    private OutputConsumer consumer;
+
+    public static class Configuration implements Serializable {
+
+        public boolean synapseDecaying = true;
+        public boolean synapseReinforcing = true;
+
+        public final Visualization visualization = Visualization.Lazy.INSTANCE;
+
+        public static class Visualization implements Serializable {
+
+            static class Lazy implements Serializable {
+
+                static final Visualization INSTANCE = new Visualization();
+
+            }
+
+            public final Visibility visibility = Visibility.Lazy.INSTANCE;
+
+            public static class Visibility implements Serializable {
+
+                static class Lazy implements Serializable {
+
+                    static final Visibility INSTANCE = new Visibility();
+
+                }
+
+                public SynapseVisibility synapseVisible = SynapseVisibility.ALL;
+                public boolean inputCellVisible = true;
+                public boolean interCellVisible = true;
+                public boolean outputCellVisible = true;
+                public boolean outputValueVisible = true;
+                public boolean stimulationVisible = true;
+                public boolean frameVisible = true;
+                public boolean mouseRangeVisible = true;
+
+            }
+
+            public boolean stimulateInputOnly = false;
+
+        }
+
+        public final Loggers loggers = Loggers.Lazy.INSTANCE;
+
+        public static class Loggers implements Serializable {
+
+            static class Lazy implements Serializable {
+
+                static final Loggers INSTANCE = new Loggers();
+
+            }
+
+            public boolean stimulations = true;
+            public boolean memory = true;
+            public boolean markedNeurons = true;
+            public boolean awaitingStimulationQueue = true;
+
+        }
+
+    }
+
+    public enum SynapseVisibility {
+        ALL,
+        STRONG_ONLY,
+        LIFETIME_ONLY,
+        NONE
+    }
+
+    Network(int inputs, int neurons, int outputs) {
         System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%3$s] [%4$-7s] %5$s %n");
 
         this.inputNeurons = new Neuron[inputs];
         this.neurons = new Neuron[neurons];
-        this.size = neurons;
+        this.size = this.neurons.length;
+        this.outputNeurons = new Neuron[outputs];
+
         this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_POOL_SIZE);
         this.markedNeurons = new Neuron[0];
+        this.configuration = new Configuration();
+    }
+
+    @Override
+    public void setVisualization(boolean visualization) {
+        boolean old = this.visualization;
+        this.visualization = visualization;
+
+        if(!old && visualization) {
+            visualizeNetwork();
+        }
+    }
+
+    @Override
+    public void start() {
+        buildUp();
+    }
+
+    @Override
+    public byte[] serialize() {
+        byte[] serialized;
+        try(ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream()) {
+            try(ObjectOutputStream outputStream = new ObjectOutputStream(arrayOutputStream)) {
+                outputStream.writeObject(this);
+                serialized = arrayOutputStream.toByteArray();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new byte[0];
+        }
+        return serialized;
+    }
+
+    void migrateConfiguration(Configuration configuration) {
+        this.configuration = configuration;
+    }
+
+    @Override
+    public Configuration config() {
+        return configuration;
+    }
+
+    @Override
+    public void stimulate(int inputNeuronIndex, double stimulation) {
+        if(inputNeuronIndex > inputNeurons.length) {
+            throw new IllegalArgumentException("Input neurons size is " + inputNeurons.length + "(max index: " + (inputNeurons.length - 1) + "), but Index #" + inputNeuronIndex + " received instead.");
+        }
+        inputNeurons[inputNeuronIndex].recept(stimulation);
+    }
+
+    @Override
+    public void outputListener(OutputConsumer consumer) {
+        this.consumer = consumer;
+    }
+
+    private void visualizeNetwork() {
+        Juikit.createFrame()
+                .title("AEGIS-VIII")
+                .size(1000, 1000)
+                .centerAlign()
+                .background(Color.DARK_GRAY)
+                .repaintInterval(10L)
+                .closeOperation(WindowConstants.EXIT_ON_CLOSE)
+                .data(1, 0)
+                .data("MOUSE_X", 0)
+                .data("MOUSE_Y", 0)
+                .data("WHEEL_ROT", 0)
+                .painter((juikit, graphics) -> {
+                    if(configuration.visualization.visibility.frameVisible) {
+                        int processed = juikit.data(1);
+                        juikit.data(1, processed + 1);
+
+                        graphics.setColor(Color.WHITE);
+                        graphics.drawString("Frame: " + processed, VIS_INDENT, juikit.height() - VIS_INDENT * 3);
+                    }
+
+                    int inputIndex = 0;
+                    for(Neuron neuron : inputNeurons) {
+                        if(neuron == null) {
+                            continue;
+                        }
+
+                        int x = VIS_INDENT + (inputIndex * (VIS_SQUARE_WIDTH + VIS_SQUARE_BETWEEN_DISTANCE));
+                        int y = VIS_INDENT;
+
+                        neuron.setCoordinate(x, y);
+
+                        if(!neuronCoordinates.contains(neuron.getCoordinate())) {
+                            neuronCoordinates.add(neuron.getCoordinate());
+                        }
+
+                        Set<Neuron> others = neuron.connectedTo(configuration.visualization.visibility.synapseVisible);
+                        for(Neuron other : others) {
+                            Neuron.Coordinate coordinate = other.getCoordinate();
+                            if(coordinate == null) {
+                                continue;
+                            }
+                            graphics.setColor(Color.BLACK);
+                            graphics.drawLine(x + VIS_SQUARE_WIDTH_HALF, y + VIS_SQUARE_HEIGHT_HALF, coordinate.x + VIS_SQUARE_WIDTH_HALF, coordinate.y + VIS_SQUARE_HEIGHT_HALF);
+                        }
+
+                        if(configuration.visualization.visibility.inputCellVisible) {
+                            Color color;
+                            if(configuration.visualization.visibility.stimulationVisible) {
+                                color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                            } else {
+                                color = new Color(0, 180, 0);
+                            }
+                            graphics.setColor(color);
+                            graphics.fillRect(x, y, VIS_SQUARE_WIDTH, VIS_SQUARE_HEIGHT);
+                        }
+
+                        inputIndex++;
+                    }
+
+                    int division = (int) Math.sqrt(size);
+                    int neuronX = 0;
+                    int neuronY = 0;
+
+                    for(Neuron neuron : neurons) {
+                        if(neuron == null) {
+                            continue;
+                        }
+
+                        int x = VIS_INDENT + (neuronX * (VIS_SQUARE_WIDTH + VIS_SQUARE_BETWEEN_DISTANCE));
+                        int y = VIS_INDENT + (neuronY * (VIS_SQUARE_HEIGHT + VIS_SQUARE_BETWEEN_DISTANCE)) + 20;
+
+                        neuron.setCoordinate(x, y);
+
+                        if(!configuration.visualization.stimulateInputOnly) {
+                            if(!neuronCoordinates.contains(neuron.getCoordinate())) {
+                                neuronCoordinates.add(neuron.getCoordinate());
+                            }
+                        }
+
+                        Set<Neuron> others = neuron.connectedTo(configuration.visualization.visibility.synapseVisible);
+                        for(Neuron other : others) {
+                            Neuron.Coordinate coordinate = other.getCoordinate();
+                            if(coordinate == null) {
+                                continue;
+                            }
+
+                            graphics.setColor(Color.BLACK);
+                            graphics.drawLine(x + VIS_SQUARE_WIDTH_HALF, y + VIS_SQUARE_HEIGHT_HALF, coordinate.x + VIS_SQUARE_WIDTH_HALF, coordinate.y + VIS_SQUARE_HEIGHT_HALF);
+                        }
+
+                        if(configuration.visualization.visibility.interCellVisible) {
+                            Color color;
+                            if(configuration.visualization.visibility.stimulationVisible) {
+                                color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                            } else {
+                                color = new Color(0, 180, 0);
+                            }
+                            graphics.setColor(color);
+                            graphics.fillRect(x, y, VIS_SQUARE_WIDTH, VIS_SQUARE_HEIGHT);
+                        }
+
+                        neuronX++;
+                        if(division == neuronX) {
+                            neuronX = 0;
+                            neuronY++;
+                        }
+                    }
+
+                    int outputIndex = 0;
+                    for(Neuron neuron : outputNeurons) {
+                        if(neuron == null) {
+                            continue;
+                        }
+
+                        int x = VIS_INDENT + (division * (VIS_SQUARE_WIDTH + VIS_SQUARE_BETWEEN_DISTANCE)) + 50;
+                        int y = VIS_INDENT + (outputIndex * (VIS_SQUARE_WIDTH + VIS_SQUARE_BETWEEN_DISTANCE)) + 50;
+
+                        neuron.setCoordinate(x, y);
+
+                        Set<Neuron> others = neuron.connectedTo(configuration.visualization.visibility.synapseVisible);
+                        for(Neuron other : others) {
+                            Neuron.Coordinate coordinate = other.getCoordinate();
+                            if(coordinate == null) {
+                                continue;
+                            }
+                            graphics.setColor(Color.BLACK);
+                            graphics.drawLine(x + VIS_SQUARE_WIDTH_HALF, y + VIS_SQUARE_HEIGHT_HALF, coordinate.x + VIS_SQUARE_WIDTH_HALF, coordinate.y + VIS_SQUARE_HEIGHT_HALF);
+                        }
+
+                        if(configuration.visualization.visibility.outputCellVisible) {
+                            Color color;
+                            if(configuration.visualization.visibility.stimulationVisible) {
+                                color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                            } else {
+                                color = new Color(0, 180, 0);
+                            }
+                            graphics.setColor(color);
+                            graphics.fillRect(x, y, VIS_SQUARE_WIDTH, VIS_SQUARE_HEIGHT);
+                        }
+
+                        if(configuration.visualization.visibility.outputValueVisible) {
+                            graphics.setColor(Color.WHITE);
+                            AtomicDouble value = outputValues.get(neuron);
+                            if(value == null) {
+                                value = new AtomicDouble(0);
+                            }
+                            graphics.drawString(value.toString(), x + VIS_SQUARE_WIDTH + 10, y + VIS_SQUARE_HEIGHT);
+                        }
+
+                        outputIndex++;
+                    }
+
+                    if(configuration.visualization.visibility.mouseRangeVisible) {
+                        int x = juikit.data("MOUSE_X");
+                        int y = juikit.data("MOUSE_Y");
+
+                        int wheel = juikit.data("WHEEL_ROT");
+
+                        graphics.setColor(Color.GRAY);
+                        graphics.drawRect(x - wheel, y - wheel, wheel * 2, wheel * 2);
+                    }
+                })
+                .mouseClicked((juikit, mouseEvent) -> {
+                    int x = mouseEvent.getX();
+                    int y = mouseEvent.getY();
+
+                    int wheel = juikit.data("WHEEL_ROT");
+
+                    for(Neuron.Coordinate coordinate : neuronCoordinates) {
+                        if(Math.abs(coordinate.x - x) < wheel && Math.abs(coordinate.y - y) < wheel) {
+                            coordinate.neuron.recept(100);
+                        }
+                    }
+                })
+                .mouseDragged((juikit, mouseEvent) -> {
+                    int x = mouseEvent.getX();
+                    int y = mouseEvent.getY();
+
+                    int wheel = juikit.data("WHEEL_ROT");
+
+                    int recepted = 0;
+                    for(Neuron.Coordinate coordinate : neuronCoordinates) {
+                        if(Math.abs(coordinate.x - x) < wheel && Math.abs(coordinate.y - y) < wheel) {
+                            coordinate.neuron.recept(100);
+                            recepted++;
+                        }
+                    }
+                    if(configuration.loggers.stimulations) {
+                        LOGGER.info("Recepted to " + recepted + " input neurons in " + neuronCoordinates.size() + " neuron coordinates.");
+                    }
+
+                    juikit.data("MOUSE_X", x);
+                    juikit.data("MOUSE_Y", y);
+                })
+                .mouseWheelMoved((juikit, mouseEvent) -> {
+                    MouseWheelEvent event = (MouseWheelEvent) mouseEvent;
+
+                    int rotation = event.getWheelRotation();
+                    int wheel = juikit.data("WHEEL_ROT");
+
+                    juikit.data("WHEEL_ROT", Math.max(0, wheel + rotation));
+                })
+                .mouseMoved((juikit, mouseEvent) -> {
+                    int x = mouseEvent.getX();
+                    int y = mouseEvent.getY();
+
+                    juikit.data("MOUSE_X", x);
+                    juikit.data("MOUSE_Y", y);
+                })
+                .visibility(true);
     }
 
     private void allocateNeurons() {
@@ -43,12 +405,32 @@ public class Network {
         allocateNeuronsInternal(inputNeurons);
     }
 
+    private void allocateOutputNeurons() {
+        allocateNeuronsInternal(outputNeurons);
+        for(Neuron neuron : outputNeurons) {
+            neuron.setOutput((outputNeuron, value) -> {
+                if(consumer != null) {
+                    consumer.accept(outputNeuron, value);
+                }
+
+                if(!outputValues.containsKey(outputNeuron)) {
+                    outputValues.put(outputNeuron, new AtomicDouble(value));
+                } else {
+                    outputValues.get(outputNeuron).set(value);
+                }
+            });
+        }
+    }
+
     private void allocateNeuronsInternal(Neuron[] neurons) {
         int checkpoint = size / 10;
+        if(checkpoint == 0) {
+            checkpoint = 1;
+        }
 
         LOGGER.info("Allocate " + neurons.length + " neurons.");
         for(int i = 0; i < neurons.length; i++) {
-            neurons[i] = new Neuron(threadPoolExecutor);
+            neurons[i] = new Neuron(i, configuration, threadPoolExecutor);
 
             if(i != 0 && i % checkpoint == 0) {
                 LOGGER.info(i + " iterator to go.");
@@ -64,14 +446,13 @@ public class Network {
         markedNeurons = Arrays.copyOf(markedNeurons, markedNeurons.length + 1);
         markedNeurons[markedNeurons.length - 1] = neuron;
 
-        neuron.setMarked(true);
+        neuron.setMarked();
     }
 
     private void createConnection() {
         if(markedNeurons.length == 0) {
             LOGGER.info("No marked neurons. Setup and mark input neurons");
-            for(int i = 0; i < inputNeurons.length; i++) {
-                Neuron neuron = inputNeurons[i];
+            for(Neuron neuron : inputNeurons) {
                 mark(neuron);
             }
         }
@@ -79,9 +460,8 @@ public class Network {
         LOGGER.info("Starting thread for connect input neurons to inter neurons.");
         new Thread(() -> {
             while(true) {
-                for(int i = 0; i < inputNeurons.length; i++) {
-                    Neuron neuron = inputNeurons[i];
-                    if(neuron.needConnection(INPUT_NEURON_MAX_SYNAPSES)) {
+                for(Neuron neuron : inputNeurons) {
+                    if (neuron.needConnection(INPUT_NEURON_MAX_SYNAPSES)) {
                         createSynapse(neuron, chooseNeuron());
                     }
                 }
@@ -97,19 +477,37 @@ public class Network {
                 }
             }
         }).start();
+
+        LOGGER.info("Starting thread for self-organizing inter neuron maps to output neurons.");
+        new Thread(() -> {
+            while(true) {
+                Neuron neuron = chooseMarkedNeuron();
+                if(neuron.needConnection(INTER_NEURON_MAX_SYNAPSES)) {
+                    createSynapse(neuron, chooseOutputNeuron());
+                }
+            }
+        }).start();
     }
 
     private void createSynapse(Neuron origin, Neuron other) {
+        if(origin.isOutputNeuron()) {
+            return;
+        }
         Synapse synapse = new Synapse();
         if(Math.random() > 0.8d) {
             synapse.synapseType = SynapseType.EXCITATORY;
+            synapse.transmitter = 5d;
         } else {
             synapse.synapseType = SynapseType.INHIBITORY;
+            synapse.transmitter = -5d;
         }
-        synapse.transmitter = 1d;
 
         origin.createConnection(other, synapse);
         mark(other);
+    }
+
+    private Neuron chooseOutputNeuron() {
+        return outputNeurons[NEURON_CHOOSER.nextInt(outputNeurons.length)];
     }
 
     private Neuron chooseNeuron() {
@@ -120,22 +518,23 @@ public class Network {
         return markedNeurons[NEURON_CHOOSER.nextInt(markedNeurons.length)];
     }
 
-    public void startTick() {
+    private void startTick() {
         for(int i = 0; i < TICK_DIVISION; i++) {
             int finalI = i;
             new Thread(() -> {
-                int len = markedNeurons.length;
-                int piece = len / TICK_DIVISION;
-
-                int start = finalI * piece;
-                int end;
-                if(finalI == TICK_DIVISION - 1) {
-                    end = len;
-                } else {
-                    end = finalI * piece + piece;
-                }
-
                 while(true) {
+                    // Variable markedNeurons are mutable.
+                    int len = markedNeurons.length;
+                    int piece = len / TICK_DIVISION;
+
+                    int start = finalI * piece;
+                    int end;
+                    if(finalI == TICK_DIVISION - 1) {
+                        end = len;
+                    } else {
+                        end = finalI * piece + piece;
+                    }
+
                     for(int j = start; j < end; j++) {
                         Neuron neuron = markedNeurons[j];
                         neuron.tick();
@@ -145,9 +544,10 @@ public class Network {
         }
     }
 
-    public void buildUp() {
-        allocateNeurons();
+    private void buildUp() {
         allocateInputNeurons();
+        allocateNeurons();
+        allocateOutputNeurons();
         memoryInfo();
         markedNeuronsInfo();
         inQueueInPoolInfo();
@@ -165,23 +565,25 @@ public class Network {
 
                 memoryInfo = !memoryInfo;
 
-                LOGGER.info("");
-                markedNeuronsInfo();
-                inQueueInPoolInfo();
+                Configuration.Loggers loggers = configuration.loggers;
+                if(loggers.markedNeurons || loggers.awaitingStimulationQueue || loggers.memory) {
+                    LOGGER.info("");
+                    markedNeuronsInfo();
+                    inQueueInPoolInfo();
 
-                if(memoryInfo) {
-                    memoryInfo();
+                    if(memoryInfo) {
+                        memoryInfo();
+                    }
+                    LOGGER.info("");
                 }
-                LOGGER.info("");
             }
         }).start();
     }
 
-    // ==========================
-    // == Information handlers ==
-    // ==========================
-
     private void memoryInfo() {
+        if(!configuration.loggers.memory) {
+            return;
+        }
         Runtime runtime = Runtime.getRuntime();
 
         double maxMemory = runtime.maxMemory() / 1024d / 1024d;
@@ -198,10 +600,16 @@ public class Network {
     }
 
     private void markedNeuronsInfo() {
+        if(!configuration.loggers.markedNeurons) {
+            return;
+        }
         LOGGER.info("Marked neurons: " + markedNeurons.length);
     }
 
     private void inQueueInPoolInfo() {
+        if(!configuration.loggers.awaitingStimulationQueue) {
+            return;
+        }
         LOGGER.info("Awaiting stimulation queue: " + threadPoolExecutor.getQueue().size());
     }
 }

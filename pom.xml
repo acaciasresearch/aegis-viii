@@ -15,7 +15,19 @@
             <artifactId>guava</artifactId>
             <version>27.1-jre</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.OrigamiDream</groupId>
+            <artifactId>juikit</artifactId>
+            <version>v1.10-SNAPSHOT</version>
+        </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
 
     <build>
         <plugins>

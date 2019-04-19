@@ -1,6 +1,8 @@
 package av.is.aegis;
 
-public class Synapse {
+import java.io.Serializable;
+
+public class Synapse implements Serializable {
 
     double transmitter;
     SynapseType synapseType;
