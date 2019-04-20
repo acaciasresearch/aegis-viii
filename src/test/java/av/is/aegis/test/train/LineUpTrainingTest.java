@@ -3,7 +3,9 @@ package av.is.aegis.test.train;
 import av.is.aegis.Network;
 import av.is.aegis.NetworkBuilder;
 import av.is.aegis.NetworkForm;
+import av.is.aegis.SynapseType;
 import avis.juikit.Juikit;
+import com.google.common.util.concurrent.AtomicDouble;
 
 import javax.swing.*;
 import java.awt.*;
@@ -27,24 +29,64 @@ public class LineUpTrainingTest {
 
     private static final int BALL_RADIUS = 20;
 
+    private static final AtomicDouble MOVE = new AtomicDouble();
+
     public static void main(String[] args) {
         NetworkForm form = NetworkBuilder.builder()
                 .inputs(2) // #0: left distance from me, #1: right distance from me
-                .inters(100)
-                .outputs(4) // #0: go to left, #1: go to right
+                .inters(2000)
+                .outputs(1) // #0: go to left, #1: go to right
                 .visualize(true)
                 .configure(configuration -> {
                     // Visualizations
                     configuration.visualization.visibility.synapseVisible = Network.SynapseVisibility.NONE;
                     configuration.visualization.stimulateInputOnly = true;
 
-                    // Loggers
-                    configuration.loggers.markedNeurons = false;
+                    configuration.inhibitorySuppressionRatio = 0.001d;
+                    configuration.excitatorySuppressionRatio = 0.001d;
+
+                    configuration.inhibitoryReinforcementRatio = 0.0001d;
+                    configuration.excitatoryReinforcementRatio = 0.0001d;
+
+                    configuration.inhibitorySynapseCreationChance = 0.5d;
+
+                    configuration.maxSynapsesForInputNeurons = 10;
+                    configuration.maxSynapsesForInterNeurons = 50;
                 }).build();
 
         form.outputListener((neuron, value) -> {
-            COMPUTER.tryMoveTo(COMPUTER.x.get() + (int) Math.max(-5, Math.min(5, value)));
+            MOVE.set(Math.max(0, Math.min(LINE_MAX_LENGTH, MOVE.get() + value)));
         });
+
+        new Thread(() -> {
+            while(true) {
+                try {
+                    Thread.sleep(10L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                {
+                    int computerX = COMPUTER.x.get();
+                    int moveTo = LINE_START_X + MOVE.intValue();
+                    if(computerX > moveTo) {
+                        COMPUTER.tryMoveTo(COMPUTER.x.get() - 1);
+                    } else if(computerX < moveTo) {
+                        COMPUTER.tryMoveTo(COMPUTER.x.get() + 1);
+                    }
+                }
+
+                int computerX = COMPUTER.x.get();
+                int cursorX = CURSOR.x.get();
+
+                if(cursorX > computerX && cursorX - computerX > 10) {
+                    form.supress(SynapseType.INHIBITORY);
+                    form.grow(SynapseType.EXCITATORY);
+                } else if(cursorX < computerX && computerX - cursorX > 10) {
+                    form.supress(SynapseType.EXCITATORY);
+                    form.grow(SynapseType.INHIBITORY);
+                }
+            }
+        }).start();
 
         form.start();
 
@@ -52,7 +94,7 @@ public class LineUpTrainingTest {
         COMPUTER.tryMoveTo(LINE_START_X);
 
         Juikit uikit = Juikit.createFrame()
-                .title("Line up! (AEGIS-VIII TRAINING)")
+                .title("Line up! (AEGIS-VIII TRAINING) - 3RD GENERATION ALGORITHM")
                 .closeOperation(WindowConstants.EXIT_ON_CLOSE)
                 .background(Color.DARK_GRAY)
                 .size(500, 500)
@@ -60,6 +102,7 @@ public class LineUpTrainingTest {
                 .repaintInterval(10L)
 
                 .data("MOUSE_X", 0)
+                .data("KEY", false)
 
                 .painter((juikit, graphics) -> {
                     // Personal Cursor
@@ -81,12 +124,38 @@ public class LineUpTrainingTest {
                     graphics.setColor(Color.GREEN);
                     int computerX = COMPUTER.x.get();
                     graphics.fillOval(computerX - (BALL_RADIUS / 2), (COMPUTER_LINE_Y + 2) - (BALL_RADIUS / 2), BALL_RADIUS, BALL_RADIUS);
+
+                    boolean metaPressed = juikit.data("KEY");
+                    graphics.setColor(Color.WHITE);
+                    if(metaPressed) {
+                        graphics.drawString("Neuroplasticity: OFF (Feed-forwarding)", 10, 20);
+                    } else {
+                        graphics.drawString("Neuroplasticity: ON (Training; Non-backpropagation)", 10, 20);
+                    }
                 })
                 .mouseMoved((juikit, mouseEvent) -> {
                     int mouseX = mouseEvent.getX();
                     juikit.data("MOUSE_X", mouseX);
 
                     CURSOR.tryMoveTo(mouseX);
+                })
+                .keyPressed((juikit, keyEvent) -> {
+                    if(keyEvent.isShiftDown()) {
+                        juikit.data("KEY", true);
+                        LOGGER.info("Key Pressed: SHIFT");
+
+                        form.config().synapseDecaying = false;
+                        form.config().synapseReinforcing = false;
+                    }
+                })
+                .keyReleased((juikit, keyEvent) -> {
+                    if(!keyEvent.isShiftDown() && juikit.data("KEY", boolean.class)) {
+                        juikit.data("KEY", false);
+                        LOGGER.info("Key Released: SHIFT");
+
+                        form.config().synapseDecaying = true;
+                        form.config().synapseReinforcing = true;
+                    }
                 })
                 .visibility(true);
 
@@ -97,18 +166,6 @@ public class LineUpTrainingTest {
 
                 form.stimulate(0, computerX - mouseX);
                 form.stimulate(1, mouseX - computerX);
-                // same with:
-                /*
-                if(mouseX > computerX) {
-                    // mouse cursor is righter than computer
-                    form.stimulate(0, computerX - mouseX);
-                    form.stimulate(1, mouseX - computerX);
-                } else {
-                    // mouse cursor is lefter than computer
-                    form.stimulate(0, computerX - mouseX);
-                    form.stimulate(1, mouseX - computerX);
-                }
-                */
             }
         }).start();
     }

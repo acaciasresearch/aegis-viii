@@ -12,6 +12,10 @@ public interface NetworkForm {
 
     void start();
 
+    void supress(SynapseType synapseType);
+
+    void grow(SynapseType synapseType);
+
     byte[] serialize();
 
 }

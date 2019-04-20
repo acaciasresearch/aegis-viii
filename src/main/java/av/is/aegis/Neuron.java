@@ -14,13 +14,10 @@ public class Neuron implements Serializable {
     private static final Set<Neuron> EMPTY_SET = new HashSet<>();
     private static final AtomicInteger ATOMIC_ID_GENERATOR = new AtomicInteger();
 
-    private static final int STRONG_SYNAPSE_THRESHOLD = 50;
-    private static final int LIFETIME_SYNAPSE_THRESHOLD = 100;
+    private static final int STRONG_SYNAPSE_THRESHOLD = 25;
+    private static final int LIFETIME_SYNAPSE_THRESHOLD = 50;
 
     private static final Random RANDOM = new Random();
-
-    private static final double EPSP_MULTIPLY = 2.13782d;
-    private static final double IPSP_MULTIPLY = 1.06271d;
 
     static final double STABLE_POTENTIAL = -77d;
 
@@ -116,10 +113,10 @@ public class Neuron implements Serializable {
                 return connections.keySet();
 
             case STRONG_ONLY:
-                return filterSynapses(STRONG_SYNAPSE_THRESHOLD);
+                return filterSynapses(configuration.excitatoryMaximumStrength / 4, configuration.inhibitoryMaximumStrength / 4);
 
             case LIFETIME_ONLY:
-                return filterSynapses(LIFETIME_SYNAPSE_THRESHOLD);
+                return filterSynapses(configuration.excitatoryMaximumStrength / 2, configuration.inhibitoryMaximumStrength / 2);
 
             case NONE:
             default:
@@ -127,19 +124,19 @@ public class Neuron implements Serializable {
         }
     }
 
-    private Set<Neuron> filterSynapses(double threshold) {
+    private Set<Neuron> filterSynapses(double exicitatoryThreshold, double inhibitoryThreshold) {
         Set<Neuron> neurons = new HashSet<>();
         for(Map.Entry<Neuron, Synapse> entry : connections.entrySet()) {
             Synapse synapse = entry.getValue();
             switch (synapse.synapseType) {
                 case EXCITATORY:
-                    if(entry.getValue().transmitter > threshold) {
+                    if(entry.getValue().transmitter > exicitatoryThreshold) {
                         neurons.add(entry.getKey());
                     }
                     break;
 
                 case INHIBITORY:
-                    if(entry.getValue().transmitter < -threshold) {
+                    if(entry.getValue().transmitter < inhibitoryThreshold) {
                         neurons.add(entry.getKey());
                     }
                     break;
@@ -206,9 +203,21 @@ public class Neuron implements Serializable {
                         iterator.remove();
                     } else {
                         // EPSP
-                        executorService.execute(new Stimulator(entry.getKey(), transmitter * EPSP_MULTIPLY));
+                        executorService.execute(new Stimulator(entry.getKey(), transmitter * configuration.epspMultiply));
                         if(configuration.synapseReinforcing) {
-                            synapse.transmitter = Math.min(1000, synapse.transmitter + 0.01d);
+                            if(configuration.excitatoryMaximumStrength != 0) {
+                                synapse.transmitter += (configuration.excitatoryMaximumStrength - synapse.transmitter) * 0.0005d;
+                            } else {
+                                synapse.transmitter += configuration.excitatoryReinforcementRatio;
+                            }
+                        }
+
+                        if(configuration.delayOnQueueStimulation > 0) {
+                            try {
+                                Thread.sleep(configuration.delayOnQueueStimulation);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                     break;
@@ -219,9 +228,21 @@ public class Neuron implements Serializable {
                         iterator.remove();
                     } else {
                         // IPSP
-                        executorService.execute(new Stimulator(entry.getKey(), transmitter * IPSP_MULTIPLY));
+                        executorService.execute(new Stimulator(entry.getKey(), transmitter * configuration.ipspMultiply));
                         if(configuration.synapseReinforcing) {
-                            synapse.transmitter = Math.max(-1000, synapse.transmitter - 0.01d);
+                            if(configuration.inhibitoryMaximumStrength != 0) {
+                                synapse.transmitter += (configuration.inhibitoryMaximumStrength - synapse.transmitter) * 0.0005d;
+                            } else {
+                                synapse.transmitter -= configuration.inhibitoryReinforcementRatio;
+                            }
+                        }
+
+                        if(configuration.delayOnQueueStimulation > 0) {
+                            try {
+                                Thread.sleep(configuration.delayOnQueueStimulation);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                     break;
@@ -229,6 +250,40 @@ public class Neuron implements Serializable {
         }
         sum.set(-77d);
         absoluteRefractory.set(!absoluteRefractory.get());
+    }
+
+    void suppress(SynapseType synapseType) {
+        for(Synapse synapse : connections.values()) {
+            if(synapse.synapseType == synapseType) {
+                switch (synapseType) {
+                    case EXCITATORY:
+                        // down to 0
+                        synapse.transmitter -= configuration.excitatorySuppressionRatio;
+                        break;
+
+                    case INHIBITORY:
+                        // up to 0
+                        synapse.transmitter += configuration.inhibitorySuppressionRatio;
+                        break;
+                }
+            }
+        }
+    }
+
+    void grow(SynapseType synapseType) {
+        for(Synapse synapse : connections.values()) {
+            if(synapse.synapseType == synapseType) {
+                switch (synapseType) {
+                    case EXCITATORY:
+                        synapse.transmitter += configuration.excitatoryGrowRatio;
+                        break;
+
+                    case INHIBITORY:
+                        synapse.transmitter -= configuration.inhibitoryGrowRatio;
+                        break;
+                }
+            }
+        }
     }
 
     void tick() {
@@ -256,11 +311,11 @@ public class Neuron implements Serializable {
                 Synapse synapse = entry.getValue();
                 switch (synapse.synapseType) {
                     case EXCITATORY:
-                        synapse.transmitter -= 0.0001d;
+                        synapse.transmitter -= configuration.excitatoryDecayingRatio;
                         break;
 
                     case INHIBITORY:
-                        synapse.transmitter += 0.0001d;
+                        synapse.transmitter += configuration.inhibitoryDecayingRatio;
                         break;
                 }
             }

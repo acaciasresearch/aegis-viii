@@ -32,8 +32,6 @@ public class Network implements NetworkForm, Serializable {
     private static final int VIS_SQUARE_HEIGHT_HALF = VIS_SQUARE_HEIGHT / 2;
     private static final int VIS_SQUARE_BETWEEN_DISTANCE = 4;
 
-    private static final int INPUT_NEURON_MAX_SYNAPSES = 10;
-    private static final int INTER_NEURON_MAX_SYNAPSES = 20;
     private static final int THREAD_POOL_SIZE = 50;
     private static final int TICK_DIVISION = 5;
 
@@ -55,8 +53,34 @@ public class Network implements NetworkForm, Serializable {
 
     public static class Configuration implements Serializable {
 
+        public int maxSynapsesForInputNeurons = 10;
+        public int maxSynapsesForInterNeurons = 20;
+
         public boolean synapseDecaying = true;
         public boolean synapseReinforcing = true;
+
+        public double excitatorySuppressionRatio = 0.001d;
+        public double inhibitorySuppressionRatio = 0.001d;
+
+        public double excitatoryGrowRatio = 0.001d;
+        public double inhibitoryGrowRatio = 0.001d;
+
+        public double excitatoryMaximumStrength = 25d;
+        public double inhibitoryMaximumStrength = -25d;
+
+        public double excitatoryReinforcementRatio = 0.01d;
+        public double inhibitoryReinforcementRatio = 0.01d;
+
+        public double excitatoryDecayingRatio = 0.00001d;
+        public double inhibitoryDecayingRatio = 0.00001d;
+
+        public long delayOnQueueStimulation = 0L;
+        public long delayOnNetworkTicking = 0L;
+
+        public double epspMultiply = 1.06271d;
+        public double ipspMultiply = 1.06271d;
+
+        public double inhibitorySynapseCreationChance = 0.8d;
 
         public final Visualization visualization = Visualization.Lazy.INSTANCE;
 
@@ -107,6 +131,7 @@ public class Network implements NetworkForm, Serializable {
             public boolean memory = true;
             public boolean markedNeurons = true;
             public boolean awaitingStimulationQueue = true;
+            public boolean currentWorkingThreads = true;
 
         }
 
@@ -128,6 +153,8 @@ public class Network implements NetworkForm, Serializable {
         this.outputNeurons = new Neuron[outputs];
 
         this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+        ThreadBuilder.incrementThreadsForStatistic(THREAD_POOL_SIZE);
+
         this.markedNeurons = new Neuron[0];
         this.configuration = new Configuration();
     }
@@ -145,6 +172,20 @@ public class Network implements NetworkForm, Serializable {
     @Override
     public void start() {
         buildUp();
+    }
+
+    @Override
+    public synchronized void supress(SynapseType synapseType) {
+        for(Neuron neuron : markedNeurons) {
+            neuron.suppress(synapseType);
+        }
+    }
+
+    @Override
+    public void grow(SynapseType synapseType) {
+        for(Neuron neuron : markedNeurons) {
+            neuron.grow(synapseType);
+        }
     }
 
     @Override
@@ -458,10 +499,10 @@ public class Network implements NetworkForm, Serializable {
         }
 
         LOGGER.info("Starting thread for connect input neurons to inter neurons.");
-        new Thread(() -> {
+        ThreadBuilder.builder().name("Neuroplasiticity-INPUT-INTER").runnable(() -> {
             while(true) {
                 for(Neuron neuron : inputNeurons) {
-                    if (neuron.needConnection(INPUT_NEURON_MAX_SYNAPSES)) {
+                    if (neuron.needConnection(configuration.maxSynapsesForInputNeurons)) {
                         createSynapse(neuron, chooseNeuron());
                     }
                 }
@@ -469,20 +510,20 @@ public class Network implements NetworkForm, Serializable {
         }).start();
 
         LOGGER.info("Starting thread for self-oraganizing inter neuron map.");
-        new Thread(() -> {
+        ThreadBuilder.builder().name("Self-organizing-INTER-INTER").runnable(() -> {
             while(true) {
                 Neuron neuron = chooseMarkedNeuron();
-                if(neuron.needConnection(INTER_NEURON_MAX_SYNAPSES)) {
+                if(neuron.needConnection(configuration.maxSynapsesForInterNeurons)) {
                     createSynapse(neuron, chooseNeuron());
                 }
             }
         }).start();
 
         LOGGER.info("Starting thread for self-organizing inter neuron maps to output neurons.");
-        new Thread(() -> {
+        ThreadBuilder.builder().name("Self-organizing-INTER-OUTPUT").runnable(() -> {
             while(true) {
                 Neuron neuron = chooseMarkedNeuron();
-                if(neuron.needConnection(INTER_NEURON_MAX_SYNAPSES)) {
+                if(neuron.needConnection(configuration.maxSynapsesForInterNeurons)) {
                     createSynapse(neuron, chooseOutputNeuron());
                 }
             }
@@ -494,7 +535,7 @@ public class Network implements NetworkForm, Serializable {
             return;
         }
         Synapse synapse = new Synapse();
-        if(Math.random() > 0.8d) {
+        if(Math.random() > configuration.inhibitorySynapseCreationChance) {
             synapse.synapseType = SynapseType.EXCITATORY;
             synapse.transmitter = 5d;
         } else {
@@ -521,8 +562,15 @@ public class Network implements NetworkForm, Serializable {
     private void startTick() {
         for(int i = 0; i < TICK_DIVISION; i++) {
             int finalI = i;
-            new Thread(() -> {
+            ThreadBuilder.builder().name("Network Ticking - #" + finalI).runnable(() -> {
                 while(true) {
+                    if(configuration.delayOnNetworkTicking > 0) {
+                        try {
+                            Thread.sleep(configuration.delayOnNetworkTicking);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
                     // Variable markedNeurons are mutable.
                     int len = markedNeurons.length;
                     int piece = len / TICK_DIVISION;
@@ -551,10 +599,11 @@ public class Network implements NetworkForm, Serializable {
         memoryInfo();
         markedNeuronsInfo();
         inQueueInPoolInfo();
+        currentWorkingThreadInifo();
         createConnection();
         startTick();
 
-        new Thread(() -> {
+        ThreadBuilder.builder().name("Network Statistic Logger").runnable(() -> {
             boolean memoryInfo = false;
             while(true) {
                 try {
@@ -570,6 +619,7 @@ public class Network implements NetworkForm, Serializable {
                     LOGGER.info("");
                     markedNeuronsInfo();
                     inQueueInPoolInfo();
+                    currentWorkingThreadInifo();
 
                     if(memoryInfo) {
                         memoryInfo();
@@ -611,5 +661,12 @@ public class Network implements NetworkForm, Serializable {
             return;
         }
         LOGGER.info("Awaiting stimulation queue: " + threadPoolExecutor.getQueue().size());
+    }
+
+    private void currentWorkingThreadInifo() {
+        if(!configuration.loggers.currentWorkingThreads) {
+            return;
+        }
+        LOGGER.info("Current working threads: " + ThreadBuilder.getThreads() + ", Non-countable but active threads: " + ThreadBuilder.getNonCountableThreads());
     }
 }
