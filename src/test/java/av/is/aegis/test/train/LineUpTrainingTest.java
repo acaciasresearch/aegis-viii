@@ -46,9 +46,6 @@ public class LineUpTrainingTest {
                     configuration.visualization.visibility.synapseVisible = Network.SynapseVisibility.NONE;
                     configuration.visualization.stimulateInputOnly = true;
 
-                    configuration.inhibitorySuppressionRatio = 0.001d;
-                    configuration.excitatorySuppressionRatio = 0.001d;
-
                     configuration.inhibitoryReinforcementRatio = 0.0001d;
                     configuration.excitatoryReinforcementRatio = 0.0001d;
 
@@ -101,9 +98,9 @@ public class LineUpTrainingTest {
                     int computerX = COMPUTER.x.get();
                     int moveTo = LINE_START_X + MOVE.intValue();
                     if(computerX > moveTo) {
-                        COMPUTER.tryMoveTo(COMPUTER.x.get() - 1);
+                        COMPUTER.tryMoveTo(COMPUTER.x.get() - 5);
                     } else if(computerX < moveTo) {
-                        COMPUTER.tryMoveTo(COMPUTER.x.get() + 1);
+                        COMPUTER.tryMoveTo(COMPUTER.x.get() + 5);
                     }
                 }
 
@@ -130,6 +127,7 @@ public class LineUpTrainingTest {
                 .size(500, 500)
                 .centerAlign()
                 .repaintInterval(10L)
+                .resizable(false)
 
                 .data("MOUSE_X", 0)
                 .data("KEY", false)
