@@ -1,5 +1,8 @@
 package av.is.aegis;
 
+import java.io.File;
+import java.io.IOException;
+
 public interface NetworkForm {
 
     Network.Configuration config();
@@ -16,6 +19,6 @@ public interface NetworkForm {
 
     void grow(SynapseType synapseType);
 
-    byte[] serialize();
+    void write(File file) throws IOException;
 
 }

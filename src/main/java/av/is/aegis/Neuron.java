@@ -2,28 +2,32 @@ package av.is.aegis;
 
 import com.google.common.util.concurrent.AtomicDouble;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 
 public class Neuron implements Serializable {
 
+    private static final Logger LOGGER = Logger.getLogger("AEGIS-VIII-NEURON");
+
     private static final Set<Neuron> EMPTY_SET = new HashSet<>();
     private static final AtomicInteger ATOMIC_ID_GENERATOR = new AtomicInteger();
-
-    private static final int STRONG_SYNAPSE_THRESHOLD = 25;
-    private static final int LIFETIME_SYNAPSE_THRESHOLD = 50;
-
     private static final Random RANDOM = new Random();
 
     static final double STABLE_POTENTIAL = -77d;
+    private static final long serialVersionUID = -7208138279404699767L;
 
-    private final ExecutorService executorService;
+    private transient ExecutorService executorService;
 
-    private Map<Neuron, Synapse> connections = new ConcurrentHashMap<>();
+    private transient Map<Neuron, Synapse> connections = new ConcurrentHashMap<>();
+    private transient Map<Integer, Synapse> mappedConnections = new ConcurrentHashMap<>();
     private final int threshold;
 
     private boolean marked = false;
@@ -41,6 +45,47 @@ public class Neuron implements Serializable {
 
     private final int index;
 
+    private void writeObject(ObjectOutputStream outputStream) throws IOException {
+        outputStream.defaultWriteObject();
+
+        Map<Integer, Synapse> mapped = new ConcurrentHashMap<>();
+        for(Map.Entry<Neuron, Synapse> entry : connections.entrySet()) {
+            mapped.put(entry.getKey().id, entry.getValue());
+        }
+        outputStream.writeObject(mapped);
+    }
+
+    private void readObject(ObjectInputStream inputStream) throws IOException, ClassNotFoundException {
+        inputStream.defaultReadObject();
+
+        mappedConnections = (ConcurrentHashMap<Integer, Synapse>) inputStream.readObject();
+    }
+
+    public void setExecutorService(ExecutorService executorService) {
+        this.executorService = executorService;
+    }
+
+    public void load(Neuron[] neurons) {
+        if(connections == null) {
+            connections = new ConcurrentHashMap<>();
+        }
+        for(int i = 0; i < neurons.length; i++) {
+            Neuron neuron = neurons[i];
+            Synapse synapse = mappedConnections.get(neuron.id);
+            if(synapse != null) {
+                connections.put(neuron, synapse);
+            }
+        }
+    }
+
+    public void clearUnusedReferences() {
+        mappedConnections.clear();
+    }
+
+    public int getSynapses() {
+        return connections.size();
+    }
+
     Neuron(int index, Network.Configuration configuration, ExecutorService executorService) {
         this.index = index;
         this.configuration = configuration;
@@ -55,6 +100,8 @@ public class Neuron implements Serializable {
     }
 
     class Coordinate implements Serializable {
+        private static final long serialVersionUID = 4133200462653403169L;
+
         int x;
         int y;
 
@@ -87,7 +134,9 @@ public class Neuron implements Serializable {
         return coordinate;
     }
 
-    class Output {
+    class Output implements Serializable {
+
+        private static final long serialVersionUID = -3216896944528759725L;
 
         OutputConsumer callback;
 

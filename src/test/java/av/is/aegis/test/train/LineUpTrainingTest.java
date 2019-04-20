@@ -1,18 +1,22 @@
 package av.is.aegis.test.train;
 
-import av.is.aegis.Network;
-import av.is.aegis.NetworkBuilder;
-import av.is.aegis.NetworkForm;
-import av.is.aegis.SynapseType;
+import av.is.aegis.*;
 import avis.juikit.Juikit;
 import com.google.common.util.concurrent.AtomicDouble;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 public class LineUpTrainingTest {
+
+    // =========================
+    // ==== USER PREFERENCE ====
+    // =========================
+    private static final boolean LOAD_NETWORK = true;
 
     private static final Logger LOGGER = Logger.getLogger("LINE UP! (AEGIS-VIII TRAINING)");
 
@@ -31,7 +35,7 @@ public class LineUpTrainingTest {
 
     private static final AtomicDouble MOVE = new AtomicDouble();
 
-    public static void main(String[] args) {
+    private static NetworkForm createNetworkForm() {
         NetworkForm form = NetworkBuilder.builder()
                 .inputs(2) // #0: left distance from me, #1: right distance from me
                 .inters(2000)
@@ -53,6 +57,34 @@ public class LineUpTrainingTest {
                     configuration.maxSynapsesForInputNeurons = 10;
                     configuration.maxSynapsesForInterNeurons = 50;
                 }).build();
+
+        form.start();
+
+        return form;
+    }
+
+    private static NetworkForm loadNetworkForm() {
+        NetworkLoader loader = new NetworkLoader(new File("aegis/lineUp.aegis"));
+
+        NetworkForm form = loader.load();
+
+        form.config().synapseDecaying = false;
+        form.config().synapseReinforcing = false;
+
+        form.setVisualization(true);
+
+        loader.start();
+
+        return loader.load();
+    }
+
+    public static void main(String[] args) {
+        NetworkForm form;
+        if(LOAD_NETWORK) {
+            form = loadNetworkForm();
+        } else {
+            form = createNetworkForm();
+        }
 
         form.outputListener((neuron, value) -> {
             MOVE.set(Math.max(0, Math.min(LINE_MAX_LENGTH, MOVE.get() + value)));
@@ -87,8 +119,6 @@ public class LineUpTrainingTest {
                 }
             }
         }).start();
-
-        form.start();
 
         CURSOR.tryMoveTo(LINE_START_X);
         COMPUTER.tryMoveTo(LINE_START_X);
@@ -125,9 +155,8 @@ public class LineUpTrainingTest {
                     int computerX = COMPUTER.x.get();
                     graphics.fillOval(computerX - (BALL_RADIUS / 2), (COMPUTER_LINE_Y + 2) - (BALL_RADIUS / 2), BALL_RADIUS, BALL_RADIUS);
 
-                    boolean metaPressed = juikit.data("KEY");
                     graphics.setColor(Color.WHITE);
-                    if(metaPressed) {
+                    if(!form.config().synapseDecaying) {
                         graphics.drawString("Neuroplasticity: OFF (Feed-forwarding)", 10, 20);
                     } else {
                         graphics.drawString("Neuroplasticity: ON (Training; Non-backpropagation)", 10, 20);
@@ -155,6 +184,23 @@ public class LineUpTrainingTest {
 
                         form.config().synapseDecaying = true;
                         form.config().synapseReinforcing = true;
+                    }
+                })
+                .keyPressed((juikit, keyEvent) -> {
+                    if(keyEvent.isMetaDown() && keyEvent.getKeyCode() == 83) {
+                        // Command+S
+                        LOGGER.info("Saving network data");
+
+                        File file = new File("aegis");
+                        if(!file.exists()) {
+                            file.mkdirs();
+                        }
+                        try {
+                            form.write(new File("aegis/lineUp.aegis"));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        LOGGER.info("Saved network data");
                     }
                 })
                 .visibility(true);

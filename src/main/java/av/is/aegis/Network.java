@@ -1,15 +1,13 @@
 package av.is.aegis;
 
 import avis.juikit.Juikit;
+import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.AtomicDouble;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseWheelEvent;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import java.io.*;
 import java.text.DecimalFormat;
 import java.util.List;
 import java.util.*;
@@ -18,6 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 public class Network implements NetworkForm, Serializable {
 
@@ -35,23 +34,29 @@ public class Network implements NetworkForm, Serializable {
     private static final int THREAD_POOL_SIZE = 50;
     private static final int TICK_DIVISION = 5;
 
+    private static final long serialVersionUID = -6723275806349768869L;
+
     private final Neuron[] neurons;
     private final Neuron[] inputNeurons;
     private final Neuron[] outputNeurons;
     private final int size;
-    private final ThreadPoolExecutor threadPoolExecutor;
+    private transient ThreadPoolExecutor threadPoolExecutor;
 
     private Neuron[] markedNeurons;
 
-    private boolean visualization = false;
+    private transient boolean visualization = false;
     private List<Neuron.Coordinate> neuronCoordinates = new CopyOnWriteArrayList<>();
     private Map<Neuron, AtomicDouble> outputValues = new ConcurrentHashMap<>();
 
     private Configuration configuration;
 
-    private OutputConsumer consumer;
+    private transient OutputConsumer consumer;
+
+    private transient boolean loaded;
 
     public static class Configuration implements Serializable {
+
+        private static final long serialVersionUID = 5562270942390906477L;
 
         public int maxSynapsesForInputNeurons = 10;
         public int maxSynapsesForInterNeurons = 20;
@@ -86,7 +91,9 @@ public class Network implements NetworkForm, Serializable {
 
         public static class Visualization implements Serializable {
 
-            static class Lazy implements Serializable {
+            private static final long serialVersionUID = 1962942946919965233L;
+
+            static class Lazy {
 
                 static final Visualization INSTANCE = new Visualization();
 
@@ -96,7 +103,9 @@ public class Network implements NetworkForm, Serializable {
 
             public static class Visibility implements Serializable {
 
-                static class Lazy implements Serializable {
+                private static final long serialVersionUID = -6174597472996071716L;
+
+                static class Lazy {
 
                     static final Visibility INSTANCE = new Visibility();
 
@@ -121,7 +130,9 @@ public class Network implements NetworkForm, Serializable {
 
         public static class Loggers implements Serializable {
 
-            static class Lazy implements Serializable {
+            private static final long serialVersionUID = -3067731846695866949L;
+
+            static class Lazy {
 
                 static final Loggers INSTANCE = new Loggers();
 
@@ -145,18 +156,55 @@ public class Network implements NetworkForm, Serializable {
     }
 
     Network(int inputs, int neurons, int outputs) {
-        System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%3$s] [%4$-7s] %5$s %n");
-
         this.inputNeurons = new Neuron[inputs];
         this.neurons = new Neuron[neurons];
         this.size = this.neurons.length;
         this.outputNeurons = new Neuron[outputs];
 
-        this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-        ThreadBuilder.incrementThreadsForStatistic(THREAD_POOL_SIZE);
-
         this.markedNeurons = new Neuron[0];
         this.configuration = new Configuration();
+
+        staticSetup();
+    }
+
+    private void staticSetup() {
+        System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%3$-25s] [%4$-7s] %5$s %n");
+        ThreadBuilder.incrementThreadsForStatistic(THREAD_POOL_SIZE);
+
+        this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    }
+
+    void setLoaded() {
+        this.loaded = true;
+        staticSetup();
+    }
+
+    void startFromLoaded() {
+        LOGGER.info("Starting AEGIS loaded from file...");
+        for(Neuron neuron : inputNeurons) {
+            neuron.setExecutorService(threadPoolExecutor);
+
+            neuron.load(inputNeurons);
+            neuron.load(neurons);
+            neuron.load(outputNeurons);
+        }
+        for(Neuron neuron : neurons) {
+            neuron.setExecutorService(threadPoolExecutor);
+
+            neuron.load(inputNeurons);
+            neuron.load(neurons);
+            neuron.load(outputNeurons);
+        }
+        for(Neuron neuron : outputNeurons) {
+            neuron.setExecutorService(threadPoolExecutor);
+
+            neuron.load(inputNeurons);
+            neuron.load(neurons);
+            neuron.load(outputNeurons);
+        }
+
+        Streams.concat(Stream.of(inputNeurons), Stream.of(neurons), Stream.of(outputNeurons)).forEach(Neuron::clearUnusedReferences);
+        buildUp();
     }
 
     @Override
@@ -171,6 +219,10 @@ public class Network implements NetworkForm, Serializable {
 
     @Override
     public void start() {
+        if(loaded) {
+            LOGGER.severe("Loaded network cannot be started by NetworkForm#start() method. Use NetworkLoader#start() instead.");
+            return;
+        }
         buildUp();
     }
 
@@ -189,18 +241,14 @@ public class Network implements NetworkForm, Serializable {
     }
 
     @Override
-    public byte[] serialize() {
-        byte[] serialized;
-        try(ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream()) {
-            try(ObjectOutputStream outputStream = new ObjectOutputStream(arrayOutputStream)) {
+    public void write(File file) throws IOException {
+        loadedResourceInfo();
+
+        try(FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+            try(ObjectOutputStream outputStream = new ObjectOutputStream(fileOutputStream)) {
                 outputStream.writeObject(this);
-                serialized = arrayOutputStream.toByteArray();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new byte[0];
         }
-        return serialized;
     }
 
     void migrateConfiguration(Configuration configuration) {
@@ -439,31 +487,43 @@ public class Network implements NetworkForm, Serializable {
     }
 
     private void allocateNeurons() {
+        LOGGER.info("Allocating inter neurons...");
         allocateNeuronsInternal(neurons);
     }
 
     private void allocateInputNeurons() {
+        LOGGER.info("Allocating input neurons...");
         allocateNeuronsInternal(inputNeurons);
     }
 
     private void allocateOutputNeurons() {
+        LOGGER.info("Allocating output neurons...");
         allocateNeuronsInternal(outputNeurons);
-        for(Neuron neuron : outputNeurons) {
-            neuron.setOutput((outputNeuron, value) -> {
-                if(consumer != null) {
-                    consumer.accept(outputNeuron, value);
-                }
 
-                if(!outputValues.containsKey(outputNeuron)) {
-                    outputValues.put(outputNeuron, new AtomicDouble(value));
-                } else {
-                    outputValues.get(outputNeuron).set(value);
-                }
-            });
+        if(!loaded) {
+            for(Neuron neuron : outputNeurons) {
+                neuron.setOutput((OutputConsumer & Serializable) (outputNeuron, value) -> {
+                    if(consumer != null) {
+                        consumer.accept(outputNeuron, value);
+                    }
+
+                    if(!outputValues.containsKey(outputNeuron)) {
+                        outputValues.put(outputNeuron, new AtomicDouble(value));
+                    } else {
+                        outputValues.get(outputNeuron).set(value);
+                    }
+                });
+            }
+        } else {
+            LOGGER.info("Skipping output neuron listeners...");
         }
     }
 
     private void allocateNeuronsInternal(Neuron[] neurons) {
+        if(loaded) {
+            LOGGER.info("Skipping allocating neurons...");
+            return;
+        }
         int checkpoint = size / 10;
         if(checkpoint == 0) {
             checkpoint = 1;
@@ -593,6 +653,10 @@ public class Network implements NetworkForm, Serializable {
     }
 
     private void buildUp() {
+        if(loaded) {
+            loadedResourceInfo();
+        }
+
         allocateInputNeurons();
         allocateNeurons();
         allocateOutputNeurons();
@@ -668,5 +732,15 @@ public class Network implements NetworkForm, Serializable {
             return;
         }
         LOGGER.info("Current working threads: " + ThreadBuilder.getThreads() + ", Non-countable but active threads: " + ThreadBuilder.getNonCountableThreads());
+    }
+
+    private void loadedResourceInfo() {
+        LOGGER.info("================= LOADED AEGIS RESOURCES =================");
+        LOGGER.info("Inputs: " + inputNeurons.length + ", Inters: " + neurons.length + ", Outputs: " + outputNeurons.length);
+        LOGGER.info("Marked: " + markedNeurons.length);
+        LOGGER.info("Neuron Coordinates: " + neuronCoordinates.size());
+
+        LOGGER.info("Syanpses: " + Streams.concat(Arrays.stream(inputNeurons), Arrays.stream(neurons), Arrays.stream(outputNeurons)).mapToInt(Neuron::getSynapses).sum());
+        LOGGER.info("==========================================================");
     }
 }
