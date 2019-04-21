@@ -53,6 +53,7 @@ public class Network implements NetworkForm, Serializable {
     private transient OutputConsumer consumer;
 
     private transient boolean loaded;
+    private transient int threadSize;
 
     public static class Configuration implements Serializable {
 
@@ -84,6 +85,9 @@ public class Network implements NetworkForm, Serializable {
 
         public double epspMultiply = 1.06271d;
         public double ipspMultiply = 1.06271d;
+
+        public int threadPoolSize = 50;
+        public int threadSizeForTicking = 5;
 
         public double inhibitorySynapseCreationChance = 0.8d;
 
@@ -168,10 +172,15 @@ public class Network implements NetworkForm, Serializable {
     }
 
     private void staticSetup() {
-        System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%3$-25s] [%4$-7s] %5$s %n");
-        ThreadBuilder.incrementThreadsForStatistic(THREAD_POOL_SIZE);
+        int threadPoolSize = configuration.threadPoolSize;
+        if(threadPoolSize == 0) {
+            threadPoolSize = THREAD_POOL_SIZE;
+        }
 
-        this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+        System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%3$-25s] [%4$-7s] %5$s %n");
+        ThreadBuilder.incrementThreadsForStatistic(threadPoolSize);
+
+        this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
     }
 
     void setLoaded() {
@@ -620,7 +629,7 @@ public class Network implements NetworkForm, Serializable {
     }
 
     private void startTick() {
-        for(int i = 0; i < TICK_DIVISION; i++) {
+        for(int i = 0; i < threadSize; i++) {
             int finalI = i;
             ThreadBuilder.builder().name("Network Ticking - #" + finalI).runnable(() -> {
                 while(true) {
@@ -633,11 +642,11 @@ public class Network implements NetworkForm, Serializable {
                     }
                     // Variable markedNeurons are mutable.
                     int len = markedNeurons.length;
-                    int piece = len / TICK_DIVISION;
+                    int piece = len / threadSize;
 
                     int start = finalI * piece;
                     int end;
-                    if(finalI == TICK_DIVISION - 1) {
+                    if(finalI == threadSize - 1) {
                         end = len;
                     } else {
                         end = finalI * piece + piece;
@@ -656,6 +665,8 @@ public class Network implements NetworkForm, Serializable {
         if(loaded) {
             loadedResourceInfo();
         }
+
+        threadSize = configuration.threadSizeForTicking == 0 ? TICK_DIVISION : configuration.threadSizeForTicking;
 
         allocateInputNeurons();
         allocateNeurons();

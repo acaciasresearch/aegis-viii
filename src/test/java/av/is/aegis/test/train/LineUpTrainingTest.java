@@ -16,7 +16,7 @@ public class LineUpTrainingTest {
     // =========================
     // ==== USER PREFERENCE ====
     // =========================
-    private static final boolean LOAD_NETWORK = true;
+    private static final boolean LOAD_NETWORK = false;
 
     private static final Logger LOGGER = Logger.getLogger("LINE UP! (AEGIS-VIII TRAINING)");
 
@@ -53,6 +53,8 @@ public class LineUpTrainingTest {
 
                     configuration.maxSynapsesForInputNeurons = 10;
                     configuration.maxSynapsesForInterNeurons = 50;
+
+                    configuration.threadSizeForTicking = 20;
                 }).build();
 
         form.start();
