@@ -16,7 +16,7 @@ public class LineUpTrainingTest {
     // =========================
     // ==== USER PREFERENCE ====
     // =========================
-    private static final boolean LOAD_NETWORK = false;
+    private static final boolean LOAD_NETWORK = true;
 
     private static final Logger LOGGER = Logger.getLogger("LINE UP! (AEGIS-VIII TRAINING)");
 
