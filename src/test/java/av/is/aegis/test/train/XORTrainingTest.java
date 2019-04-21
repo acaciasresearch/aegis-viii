@@ -214,7 +214,7 @@ public class XORTrainingTest {
         }).start();
 
         Juikit uikit = Juikit.createFrame()
-                .title("XOR (AEGIS-VIII TRAINING) -- 3RD GENERATION ALGORITHM")
+                .title("XOR (AEGIS-VIII TRAINING) - 3RD GENERATION ALGORITHM")
                 .closeOperation(WindowConstants.EXIT_ON_CLOSE)
                 .background(Color.DARK_GRAY)
                 .size(WINDOW_WIDTH, 500)
