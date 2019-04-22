@@ -50,7 +50,8 @@ public class Network implements NetworkForm, Serializable {
 
     private Configuration configuration;
 
-    private transient OutputConsumer consumer;
+    private transient OutputConsumer outputConsumer;
+    private transient OutputConsumer ganglionConsumer;
 
     private transient boolean loaded;
     private transient int threadSize;
@@ -278,7 +279,12 @@ public class Network implements NetworkForm, Serializable {
 
     @Override
     public void outputListener(OutputConsumer consumer) {
-        this.consumer = consumer;
+        this.outputConsumer = consumer;
+    }
+
+    @Override
+    public void ganglionListener(OutputConsumer consumer) {
+        this.ganglionConsumer = consumer;
     }
 
     private void visualizeNetwork() {
@@ -535,8 +541,8 @@ public class Network implements NetworkForm, Serializable {
         if(!loaded) {
             for(Neuron neuron : outputNeurons) {
                 neuron.setOutput((OutputConsumer & Serializable) (outputNeuron, value) -> {
-                    if(consumer != null) {
-                        consumer.accept(outputNeuron, value);
+                    if(outputConsumer != null) {
+                        outputConsumer.accept(outputNeuron, value);
                     }
 
                     if(!outputValues.containsKey(outputNeuron)) {
@@ -595,7 +601,13 @@ public class Network implements NetworkForm, Serializable {
             while(true) {
                 for(Neuron neuron : inputNeurons) {
                     if (neuron.needConnection(configuration.maxSynapsesForInputNeurons)) {
-                        createSynapse(neuron, chooseNeuron());
+                        Neuron ganglion = chooseNeuron();
+                        ganglion.setGanglion((OutputConsumer & Serializable) (ganglionNeuron, value) -> {
+                            if(ganglionConsumer != null) {
+                                ganglionConsumer.accept(ganglionNeuron, value);
+                            }
+                        });
+                        createSynapse(neuron, ganglion);
                     }
                 }
             }

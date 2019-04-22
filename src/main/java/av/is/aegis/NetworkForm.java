@@ -11,6 +11,8 @@ public interface NetworkForm {
 
     void outputListener(OutputConsumer consumer);
 
+    void ganglionListener(OutputConsumer consumer);
+
     void setVisualization(boolean visualization);
 
     void start();

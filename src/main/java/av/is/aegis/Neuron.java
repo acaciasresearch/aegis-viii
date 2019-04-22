@@ -39,6 +39,7 @@ public class Neuron implements Serializable {
 
     private Coordinate coordinate;
     private Output output;
+    private Ganglion ganglion;
 
     private final Network.Configuration configuration;
     private final int id;
@@ -142,6 +143,14 @@ public class Neuron implements Serializable {
 
     }
 
+    class Ganglion implements Serializable {
+
+        private static final long serialVersionUID = 4438600614489480081L;
+
+        OutputConsumer callback;
+
+    }
+
     void setOutput(OutputConsumer callback) {
         if(callback == null) {
             this.output = null;
@@ -154,6 +163,20 @@ public class Neuron implements Serializable {
 
     boolean isOutputNeuron() {
         return output != null;
+    }
+
+    void setGanglion(OutputConsumer callback) {
+        if(callback == null) {
+            this.ganglion = null;
+        } else {
+            Ganglion ganglion = new Ganglion();
+            ganglion.callback = callback;
+            this.ganglion = ganglion;
+        }
+    }
+
+    boolean isGanglion() {
+        return ganglion != null;
     }
 
     Set<Neuron> connectedTo(Network.SynapseVisibility visibility) {
@@ -381,6 +404,8 @@ public class Neuron implements Serializable {
     void recept(double stimulation) {
         if(output != null) {
             output.callback.accept(this, stimulation);
+        } else if(ganglion != null) {
+            ganglion.callback.accept(this, stimulation);
         } else {
             if(refractory.get() && absoluteRefractory.get()) {
                 return;
