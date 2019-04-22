@@ -167,8 +167,6 @@ public class Network implements NetworkForm, Serializable {
 
         this.markedNeurons = new Neuron[0];
         this.configuration = new Configuration();
-
-        staticSetup();
     }
 
     private void staticSetup() {
@@ -212,7 +210,7 @@ public class Network implements NetworkForm, Serializable {
             neuron.load(outputNeurons);
         }
 
-        Streams.concat(Stream.of(inputNeurons), Stream.of(neurons), Stream.of(outputNeurons)).forEach(Neuron::clearUnusedReferences);
+        Streams.concat(Stream.of(inputNeurons), Stream.of(neurons), Stream.of(outputNeurons)).forEach(Neuron::startFromLoaded);
         buildUp();
     }
 
@@ -262,6 +260,7 @@ public class Network implements NetworkForm, Serializable {
 
     void migrateConfiguration(Configuration configuration) {
         this.configuration = configuration;
+        staticSetup();
     }
 
     @Override
@@ -331,9 +330,17 @@ public class Network implements NetworkForm, Serializable {
                         if(configuration.visualization.visibility.inputCellVisible) {
                             Color color;
                             if(configuration.visualization.visibility.stimulationVisible) {
-                                color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                                if(neuron.isRefractory()) {
+                                    color = new Color(138, 0, 0);
+                                } else {
+                                    color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                                }
                             } else {
-                                color = new Color(0, 180, 0);
+                                if(neuron.isRefractory()) {
+                                    color = new Color(138, 0, 0);
+                                } else {
+                                    color = new Color(0, 180, 0);
+                                }
                             }
                             graphics.setColor(color);
                             graphics.fillRect(x, y, VIS_SQUARE_WIDTH, VIS_SQUARE_HEIGHT);
@@ -376,9 +383,17 @@ public class Network implements NetworkForm, Serializable {
                         if(configuration.visualization.visibility.interCellVisible) {
                             Color color;
                             if(configuration.visualization.visibility.stimulationVisible) {
-                                color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                                if(neuron.isRefractory()) {
+                                    color = new Color(138, 0, 0);
+                                } else {
+                                    color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                                }
                             } else {
-                                color = new Color(0, 180, 0);
+                                if(neuron.isRefractory()) {
+                                    color = new Color(138, 0, 0);
+                                } else {
+                                    color = new Color(0, 180, 0);
+                                }
                             }
                             graphics.setColor(color);
                             graphics.fillRect(x, y, VIS_SQUARE_WIDTH, VIS_SQUARE_HEIGHT);
@@ -415,9 +430,17 @@ public class Network implements NetworkForm, Serializable {
                         if(configuration.visualization.visibility.outputCellVisible) {
                             Color color;
                             if(configuration.visualization.visibility.stimulationVisible) {
-                                color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                                if(neuron.isRefractory()) {
+                                    color = new Color(138, 0, 0);
+                                } else {
+                                    color = new Color(0, (int) Math.max(0, Math.min(255, (neuron.getSum().get() - Neuron.STABLE_POTENTIAL) * 2 + 180)), 0);
+                                }
                             } else {
-                                color = new Color(0, 180, 0);
+                                if(neuron.isRefractory()) {
+                                    color = new Color(138, 0, 0);
+                                } else {
+                                    color = new Color(0, 180, 0);
+                                }
                             }
                             graphics.setColor(color);
                             graphics.fillRect(x, y, VIS_SQUARE_WIDTH, VIS_SQUARE_HEIGHT);

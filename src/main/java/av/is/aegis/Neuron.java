@@ -78,7 +78,7 @@ public class Neuron implements Serializable {
         }
     }
 
-    public void clearUnusedReferences() {
+    public void startFromLoaded() {
         mappedConnections.clear();
     }
 
@@ -192,6 +192,10 @@ public class Neuron implements Serializable {
             }
         }
         return neurons;
+    }
+
+    boolean isRefractory() {
+        return refractory.get();
     }
 
     boolean isMarked() {
