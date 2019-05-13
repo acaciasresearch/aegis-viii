@@ -362,6 +362,50 @@ public class Neuron implements Serializable {
         }
     }
 
+    void suppressOf(SynapseType synapseType, List<Neuron> processed) {
+        if(processed.contains(this)) {
+            return;
+        }
+        processed.add(this);
+        for(Map.Entry<Neuron, Synapse> entry : connections.entrySet()) {
+            if(entry.getValue().synapseType == synapseType) {
+                switch (synapseType) {
+                    case EXCITATORY:
+                        // down to 0
+                        entry.getValue().transmitter -= configuration.excitatorySuppressionRatio;
+                        break;
+
+                    case INHIBITORY:
+                        // up to 0
+                        entry.getValue().transmitter += configuration.inhibitorySuppressionRatio;
+                        break;
+                }
+                entry.getKey().suppressOf(synapseType, processed);
+            }
+        }
+    }
+
+    void growOf(SynapseType synapseType, List<Neuron> processed) {
+        if(processed.contains(this)) {
+            return;
+        }
+        processed.add(this);
+        for(Map.Entry<Neuron, Synapse> entry : connections.entrySet()) {
+            if(entry.getValue().synapseType == synapseType) {
+                switch (synapseType) {
+                    case EXCITATORY:
+                        entry.getValue().transmitter += configuration.excitatoryGrowRatio;
+                        break;
+
+                    case INHIBITORY:
+                        entry.getValue().transmitter -= configuration.inhibitoryGrowRatio;
+                        break;
+                }
+                entry.getKey().growOf(synapseType, processed);
+            }
+        }
+    }
+
     void tick() {
         if(refractory.get()) {
             if(refractoryDuration.decrementAndGet() == 0) {

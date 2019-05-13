@@ -100,20 +100,20 @@ public class LineUpTrainingTest {
                     int computerX = COMPUTER.x.get();
                     int moveTo = LINE_START_X + MOVE.intValue();
                     if(computerX > moveTo) {
-                        COMPUTER.tryMoveTo(COMPUTER.x.get() - 5);
+                        COMPUTER.tryMoveTo(COMPUTER.x.get() - 2);
                     } else if(computerX < moveTo) {
-                        COMPUTER.tryMoveTo(COMPUTER.x.get() + 5);
+                        COMPUTER.tryMoveTo(COMPUTER.x.get() + 2);
                     }
                 }
 
                 int computerX = COMPUTER.x.get();
                 int cursorX = CURSOR.x.get();
 
-                if(cursorX > computerX && cursorX - computerX > 10) {
-                    form.supress(SynapseType.INHIBITORY);
+                if(cursorX > computerX && cursorX - computerX > 5) {
+                    form.suppress(SynapseType.INHIBITORY);
                     form.grow(SynapseType.EXCITATORY);
-                } else if(cursorX < computerX && computerX - cursorX > 10) {
-                    form.supress(SynapseType.EXCITATORY);
+                } else if(cursorX < computerX && computerX - cursorX > 5) {
+                    form.suppress(SynapseType.EXCITATORY);
                     form.grow(SynapseType.INHIBITORY);
                 }
             }

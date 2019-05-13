@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -31,6 +32,8 @@ public class Network implements NetworkForm, Serializable {
     private static final int VIS_SQUARE_HEIGHT_HALF = VIS_SQUARE_HEIGHT / 2;
     private static final int VIS_SQUARE_BETWEEN_DISTANCE = 4;
 
+    private static final int VIS_OUTPUT_GRAPH_WIDTH = 500;
+
     private static final int THREAD_POOL_SIZE = 50;
     private static final int TICK_DIVISION = 5;
 
@@ -45,6 +48,25 @@ public class Network implements NetworkForm, Serializable {
     private Neuron[] markedNeurons;
 
     private transient boolean visualization = false;
+    private transient boolean outputGraph = false;
+    private transient AtomicInteger graphIndex = new AtomicInteger(0);
+    private transient AtomicInteger removeIndex = new AtomicInteger(0);
+    private transient Map<Integer, List<GraphElement>> graphElementMap = new ConcurrentHashMap<>();
+
+    static class GraphElement {
+
+        int index;
+        double value;
+
+        static GraphElement of(int index, double value) {
+            GraphElement element = new GraphElement();
+            element.index = index;
+            element.value = value;
+            return element;
+        }
+
+    }
+
     private List<Neuron.Coordinate> neuronCoordinates = new CopyOnWriteArrayList<>();
     private Map<Neuron, AtomicDouble> outputValues = new ConcurrentHashMap<>();
 
@@ -182,6 +204,24 @@ public class Network implements NetworkForm, Serializable {
         this.threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
     }
 
+    private void writeObject(ObjectOutputStream outputStream) throws IOException {
+        outputStream.defaultWriteObject();
+    }
+
+    private void readObject(ObjectInputStream inputStream) throws IOException, ClassNotFoundException {
+        inputStream.defaultReadObject();
+
+        if(graphIndex == null) {
+            graphIndex = new AtomicInteger();
+        }
+        if(removeIndex == null) {
+            removeIndex = new AtomicInteger();
+        }
+        if(graphElementMap == null) {
+            graphElementMap = new ConcurrentHashMap<>();
+        }
+    }
+
     void setLoaded() {
         this.loaded = true;
         staticSetup();
@@ -226,6 +266,16 @@ public class Network implements NetworkForm, Serializable {
     }
 
     @Override
+    public void setOutputGraph(boolean outputGraph) {
+        boolean old = this.outputGraph;
+        this.outputGraph = outputGraph;
+
+        if(!old && outputGraph) {
+            visualizeOutputGraph();
+        }
+    }
+
+    @Override
     public void start() {
         if(loaded) {
             LOGGER.severe("Loaded network cannot be started by NetworkForm#start() method. Use NetworkLoader#start() instead.");
@@ -235,7 +285,7 @@ public class Network implements NetworkForm, Serializable {
     }
 
     @Override
-    public synchronized void supress(SynapseType synapseType) {
+    public synchronized void suppress(SynapseType synapseType) {
         for(Neuron neuron : markedNeurons) {
             neuron.suppress(synapseType);
         }
@@ -246,6 +296,16 @@ public class Network implements NetworkForm, Serializable {
         for(Neuron neuron : markedNeurons) {
             neuron.grow(synapseType);
         }
+    }
+
+    @Override
+    public void suppressOf(Neuron neuron, SynapseType synapseType) {
+        neuron.suppressOf(synapseType, new ArrayList<>());
+    }
+
+    @Override
+    public void growOf(Neuron neuron, SynapseType synapseType) {
+        neuron.growOf(synapseType, new ArrayList<>());
     }
 
     @Override
@@ -285,6 +345,37 @@ public class Network implements NetworkForm, Serializable {
     @Override
     public void ganglionListener(OutputConsumer consumer) {
         this.ganglionConsumer = consumer;
+    }
+
+    private void visualizeOutputGraph() {
+        Juikit.createFrame()
+                .title("AEGIS-VIII (OUTPUT-GRAPH)")
+                .size(VIS_OUTPUT_GRAPH_WIDTH, Math.max(100, outputNeurons.length + 30))
+                .centerAlign()
+                .background(Color.WHITE)
+                .repaintInterval(10L)
+                .closeOperation(WindowConstants.EXIT_ON_CLOSE)
+                .painter((juikit, graphics) -> {
+                    graphIndex.incrementAndGet();
+
+                    for(Map.Entry<Integer, List<GraphElement>> entry : graphElementMap.entrySet()) {
+                        int index = entry.getKey();
+                        List<GraphElement> elements = entry.getValue();
+
+                        int x = index;
+                        if(graphIndex.get() > VIS_OUTPUT_GRAPH_WIDTH) {
+                            x -= graphIndex.get() - VIS_OUTPUT_GRAPH_WIDTH;
+                        }
+                        for(GraphElement element : elements) {
+                            graphics.drawLine(x, element.index + 10, x, element.index + 10);
+                        }
+                    }
+
+                    if(graphElementMap.size() > VIS_OUTPUT_GRAPH_WIDTH) {
+                        graphElementMap.remove(removeIndex.getAndIncrement());
+                    }
+                })
+                .visibility(true);
     }
 
     private void visualizeNetwork() {
@@ -549,6 +640,17 @@ public class Network implements NetworkForm, Serializable {
                         outputValues.put(outputNeuron, new AtomicDouble(value));
                     } else {
                         outputValues.get(outputNeuron).set(value);
+                    }
+
+                    int index = graphIndex.get();
+
+                    List<GraphElement> elements = graphElementMap.get(index);
+                    if(elements != null) {
+                        elements.add(GraphElement.of(outputNeuron.getIndex(), value));
+                    } else {
+                        elements = new CopyOnWriteArrayList<>();
+                        elements.add(GraphElement.of(outputNeuron.getIndex(), value));
+                        graphElementMap.put(index, elements);
                     }
                 });
             }

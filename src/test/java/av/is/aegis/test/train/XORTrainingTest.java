@@ -52,7 +52,7 @@ public class XORTrainingTest {
                 int computerX = COMPUTER.x.get();
 
                 if(computerX < LINE_END_X) {
-                    form.supress(SynapseType.INHIBITORY);
+                    form.suppress(SynapseType.INHIBITORY);
                     form.grow(SynapseType.EXCITATORY);
                 }
             }
@@ -69,7 +69,7 @@ public class XORTrainingTest {
                 int computerX = COMPUTER.x.get();
 
                 if(computerX > LINE_START_X) {
-                    form.supress(SynapseType.EXCITATORY);
+                    form.suppress(SynapseType.EXCITATORY);
                     form.grow(SynapseType.INHIBITORY);
                 }
             }
@@ -86,7 +86,7 @@ public class XORTrainingTest {
                 int computerX = COMPUTER.x.get();
 
                 if(computerX > LINE_START_X) {
-                    form.supress(SynapseType.EXCITATORY);
+                    form.suppress(SynapseType.EXCITATORY);
                     form.grow(SynapseType.INHIBITORY);
                 }
             }
@@ -103,7 +103,7 @@ public class XORTrainingTest {
                 int computerX = COMPUTER.x.get();
 
                 if(computerX < LINE_END_X) {
-                    form.supress(SynapseType.INHIBITORY);
+                    form.suppress(SynapseType.INHIBITORY);
                     form.grow(SynapseType.EXCITATORY);
                 }
             }

@@ -15,11 +15,17 @@ public interface NetworkForm {
 
     void setVisualization(boolean visualization);
 
+    void setOutputGraph(boolean outputGraph);
+
     void start();
 
-    void supress(SynapseType synapseType);
+    void suppress(SynapseType synapseType);
 
     void grow(SynapseType synapseType);
+
+    void suppressOf(Neuron neuron, SynapseType synapseType);
+
+    void growOf(Neuron neuron, SynapseType synapseType);
 
     void write(File file) throws IOException;
 

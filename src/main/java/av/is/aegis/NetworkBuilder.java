@@ -12,6 +12,7 @@ public class NetworkBuilder {
     private int interNeurons;
     private int outputNeurons;
     private boolean visualize;
+    private boolean outputGraph;
     private Network.Configuration configuration = new Network.Configuration();
 
     private NetworkBuilder() {
@@ -37,6 +38,11 @@ public class NetworkBuilder {
         return this;
     }
 
+    public NetworkBuilder outputGraph(boolean outputGraph) {
+        this.outputGraph = outputGraph;
+        return this;
+    }
+
     public NetworkBuilder configure(Consumer<Network.Configuration> consumer) {
         consumer.accept(configuration);
         return this;
@@ -55,6 +61,9 @@ public class NetworkBuilder {
         Network network = new Network(inputNeurons, interNeurons, outputNeurons);
         if(visualize) {
             network.setVisualization(true);
+        }
+        if(outputGraph) {
+            network.setOutputGraph(true);
         }
         network.migrateConfiguration(configuration);
         return network;

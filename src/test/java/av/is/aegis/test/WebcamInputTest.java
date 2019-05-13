@@ -26,7 +26,7 @@ import java.util.logging.Logger;
  */
 public class WebcamInputTest {
 
-    private static final int DIVISION = 1;
+    private static final int DIVISION = 4;
 
     private static final Logger LOGGER = Logger.getLogger("Webcam input test");
     private static final AtomicReference<Image> IMAGE = new AtomicReference<>();
@@ -48,6 +48,7 @@ public class WebcamInputTest {
                 .inters(10000)
                 .outputs((resolution.width / DIVISION) * (resolution.height / DIVISION))
 //                .visualize(true)
+//                .outputGraph(true)
                 .configure(configuration -> {
                     configuration.visualization.visibility.synapseVisible = Network.SynapseVisibility.NONE;
 
@@ -150,10 +151,16 @@ public class WebcamInputTest {
                     continue;
                 }
 
-                byte[] pixelData = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-                ByteBuffer buffer = ByteBuffer.wrap(pixelData).order(ByteOrder.LITTLE_ENDIAN);
-                int[] pixels = new int[pixelData.length / 4];
-                buffer.asIntBuffer().put(pixels);
+                int[] pixels;
+
+                if(image.getRaster().getDataBuffer() instanceof DataBufferByte) {
+                    byte[] pixelData = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+                    ByteBuffer buffer = ByteBuffer.wrap(pixelData).order(ByteOrder.LITTLE_ENDIAN);
+                    pixels = new int[pixelData.length / 4];
+                    buffer.asIntBuffer().put(pixels);
+                } else {
+                    pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+                }
 
                 for(int i = 0; i < pixels.length; i++) {
                     form.stimulate(i, pixels[i] - BLACK_RGB);

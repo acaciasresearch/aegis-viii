@@ -136,8 +136,8 @@ public class FollowerTrainingTest {
                     double afterDistance = Math.sqrt(afterDiffX * afterDiffX + afterDiffY * afterDiffY);
 
                     if(beforeDistance < afterDistance) {
-                        form.supress(SynapseType.INHIBITORY);
-                        form.supress(SynapseType.EXCITATORY);
+                        form.suppress(SynapseType.INHIBITORY);
+                        form.suppress(SynapseType.EXCITATORY);
                     } else {
                         form.grow(SynapseType.INHIBITORY);
                         form.grow(SynapseType.EXCITATORY);
@@ -153,16 +153,16 @@ public class FollowerTrainingTest {
 
                     if(computerX > cursorX && computerY > cursorY) {
                         form.grow(SynapseType.INHIBITORY);
-                        form.supress(SynapseType.EXCITATORY);
+                        form.suppress(SynapseType.EXCITATORY);
                     } else if(computerX < cursorX && computerY > cursorY) {
                         form.grow(SynapseType.INHIBITORY);
-                        form.supress(SynapseType.EXCITATORY);
+                        form.suppress(SynapseType.EXCITATORY);
                     } else if(computerX > cursorX && computerY < cursorY) {
                         form.grow(SynapseType.EXCITATORY);
-                        form.supress(SynapseType.INHIBITORY);
+                        form.suppress(SynapseType.INHIBITORY);
                     } else if(computerX < cursorX && computerY < cursorY) {
                         form.grow(SynapseType.EXCITATORY);
-                        form.supress(SynapseType.INHIBITORY);
+                        form.suppress(SynapseType.INHIBITORY);
                     }
                 }
             }
