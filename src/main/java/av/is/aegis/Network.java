@@ -715,7 +715,7 @@ public class Network implements NetworkForm, Serializable {
             }
         }).start();
 
-        LOGGER.info("Starting thread for self-oraganizing inter neuron map.");
+        LOGGER.info("Starting thread for self-organizing inter neuron map.");
         ThreadBuilder.builder().name("Self-organizing-INTER-INTER").runnable(() -> {
             while(true) {
                 Neuron neuron = chooseMarkedNeuron();
