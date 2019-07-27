@@ -27,6 +27,8 @@ public interface NetworkForm {
 
     void growOf(Neuron neuron, SynapseType synapseType);
 
+    int getAwaitingStimulationQueues();
+
     void write(File file) throws IOException;
 
 }

@@ -736,6 +736,11 @@ public class Network implements NetworkForm, Serializable {
         }).start();
     }
 
+    @Override
+    public int getAwaitingStimulationQueues() {
+        return threadPoolExecutor.getQueue().size();
+    }
+
     private void createSynapse(Neuron origin, Neuron other) {
         if(origin.isOutputNeuron()) {
             return;
