@@ -1,9 +1,9 @@
 package av.is.aegis.test.train;
 
 import av.is.aegis.*;
-import avis.juikit.Juikit;
-import avis.juikit.internal.Button;
 import com.google.common.util.concurrent.AtomicDouble;
+import studio.avis.juikit.Juikit;
+import studio.avis.juikit.internal.Button;
 
 import javax.swing.*;
 import java.awt.*;

@@ -1,8 +1,8 @@
 package av.is.aegis;
 
-import avis.juikit.Juikit;
 import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.AtomicDouble;
+import studio.avis.juikit.Juikit;
 
 import javax.swing.*;
 import java.awt.*;

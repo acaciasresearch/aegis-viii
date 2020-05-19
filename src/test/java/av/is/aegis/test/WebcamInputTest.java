@@ -3,10 +3,10 @@ package av.is.aegis.test;
 import av.is.aegis.Network;
 import av.is.aegis.NetworkBuilder;
 import av.is.aegis.NetworkForm;
-import avis.juikit.Juikit;
 import com.github.sarxos.webcam.Webcam;
 import com.github.sarxos.webcam.WebcamResolution;
 import org.imgscalr.Scalr;
+import studio.avis.juikit.Juikit;
 
 import javax.swing.*;
 import java.awt.*;

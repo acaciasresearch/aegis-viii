@@ -3,7 +3,7 @@ package av.is.aegis.test;
 import av.is.aegis.Network;
 import av.is.aegis.NetworkBuilder;
 import av.is.aegis.NetworkForm;
-import avis.juikit.Juikit;
+import studio.avis.juikit.Juikit;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
