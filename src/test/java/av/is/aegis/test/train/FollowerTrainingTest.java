@@ -185,6 +185,9 @@ public class FollowerTrainingTest {
                 .data("MOUSE_Y", 0)
 
                 .painter((juikit, graphics) -> {
+                    graphics.setColor(Color.DARK_GRAY);
+                    graphics.fillRect(0, 0, juikit.width(), juikit.height());
+
                     // Personal Cursor
                     graphics.setColor(Color.ORANGE);
                     int cursorX = CURSOR.x.get();

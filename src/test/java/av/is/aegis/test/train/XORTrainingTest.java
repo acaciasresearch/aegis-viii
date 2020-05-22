@@ -225,6 +225,8 @@ public class XORTrainingTest {
                 .data("KEY", false)
 
                 .painter((juikit, graphics) -> {
+                    graphics.setColor(Color.DARK_GRAY);
+                    graphics.fillRect(0, 0, juikit.width(), juikit.height());
                     // Computer
 
                     graphics.setColor(Color.WHITE);

@@ -356,6 +356,9 @@ public class Network implements NetworkForm, Serializable {
                 .repaintInterval(10L)
                 .closeOperation(WindowConstants.EXIT_ON_CLOSE)
                 .painter((juikit, graphics) -> {
+                    graphics.setColor(Color.WHITE);
+                    graphics.fillRect(0, 0, juikit.width(), juikit.height());
+
                     graphIndex.incrementAndGet();
 
                     for(Map.Entry<Integer, List<GraphElement>> entry : graphElementMap.entrySet()) {
@@ -391,6 +394,9 @@ public class Network implements NetworkForm, Serializable {
                 .data("MOUSE_Y", 0)
                 .data("WHEEL_ROT", 0)
                 .painter((juikit, graphics) -> {
+                    graphics.setColor(Color.DARK_GRAY);
+                    graphics.fillRect(0, 0, juikit.width(), juikit.height());
+
                     if(configuration.visualization.visibility.frameVisible) {
                         int processed = juikit.data(1);
                         juikit.data(1, processed + 1);

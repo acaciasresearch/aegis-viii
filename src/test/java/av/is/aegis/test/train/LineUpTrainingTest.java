@@ -38,7 +38,7 @@ public class LineUpTrainingTest {
     private static NetworkForm createNetworkForm() {
         NetworkForm form = NetworkBuilder.builder()
                 .inputs(2) // #0: left distance from me, #1: right distance from me
-                .inters(2000)
+                .inters(50)
                 .outputs(1) // #0: go to left, #1: go to right
                 .visualize(true)
                 .configure(configuration -> {
@@ -69,6 +69,7 @@ public class LineUpTrainingTest {
 
         form.config().synapseDecaying = false;
         form.config().synapseReinforcing = false;
+        form.config().delayOnNetworkTicking = 5L;
 
         form.setVisualization(true);
 
@@ -135,6 +136,9 @@ public class LineUpTrainingTest {
                 .data("KEY", false)
 
                 .painter((juikit, graphics) -> {
+                    graphics.setColor(Color.DARK_GRAY);
+                    graphics.fillRect(0, 0, juikit.width(), juikit.height());
+
                     // Personal Cursor
                     graphics.setColor(Color.WHITE);
                     for(int i = 0; i < 5; i++) {
