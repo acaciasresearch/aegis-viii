@@ -32,10 +32,10 @@ public class Neuron implements Serializable {
 
     private boolean marked = false;
 
-    private AtomicDouble sum = new AtomicDouble(STABLE_POTENTIAL);
-    private AtomicInteger refractoryDuration = new AtomicInteger();
-    private AtomicBoolean refractory = new AtomicBoolean();
-    private AtomicBoolean absoluteRefractory = new AtomicBoolean();
+    private final AtomicDouble sum = new AtomicDouble(STABLE_POTENTIAL);
+    private final AtomicInteger refractoryDuration = new AtomicInteger();
+    private final AtomicBoolean refractory = new AtomicBoolean();
+    private final AtomicBoolean absoluteRefractory = new AtomicBoolean();
 
     private Coordinate coordinate;
     private Output output;
